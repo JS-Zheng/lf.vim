@@ -1,0 +1,121 @@
+# ============================================================================
+#  General {{{
+# ============================================================================
+# Format string of the prompt shown in the top line.
+set promptfmt "\033[32;1m%u@%h\033[0m:\033[34;1m%d\033[0m"
+
+
+# }}}
+# ============================================================================
+#  Vim Callback {{{
+# ============================================================================
+cmd edit ${{
+    set -f
+
+    editor_args=${1:-}
+
+    if [[ -z ${LF_VIM_CB:-} ]]; then
+        files=""
+        # quote each file path
+        for file in $fx; do
+            files="$files '"$file"'"
+        done
+
+        # xargs -o: Reopen stdin as /dev/tty in the child process
+        echo "$files" | xargs -o $EDITOR $editor_args
+        exit 0
+    fi
+
+    edit_cmd=${2:-tabe}
+
+    commands=""
+    for file in $fx; do
+        commands="$commands""execute '$edit_cmd' fnameescape('"$file"')\n"
+    done
+    echo $commands >> $LF_VIM_CB
+    lf -remote "send $id quit"
+}}
+
+map e :edit '-p' 'tabe'
+map <c-t> :edit '-p' 'tabe'
+map <c-x> :edit '-o' 'split'
+map <c-v> :edit '-O' 'vsplit'
+
+
+# }}}
+# ============================================================================
+#  Save the current working directory and Quit {{{
+# ============================================================================
+# It needs passing a `LF_LAST_DIR` environment variable to lf executable
+# (e.g., LF_LAST_DIR="$(mktemp)" command lf "$@") to enable this feature.
+cmd save_cwd ${{
+    if [[ -z ${LF_LAST_DIR:-} ]]; then
+        lf -remote "send $id echoerr 'Please provide a \`LF_LAST_DIR\` to enable the cwd-saving feature.'"
+        exit 1
+    fi
+    echo $PWD > $LF_LAST_DIR
+    fmt='\033[32;1m%u@%h\033[0m:\033[34;1m%d\033[0m'
+    lf -remote "send $id set promptfmt \"$fmt\""
+}}
+
+cmd save_cwd_and_quit ${{
+    if [[ -z ${LF_LAST_DIR:-} ]]; then
+        echo 'Please provide a `LF_LAST_DIR` to enable the cwd-saving feature.'
+        lf -remote "send $id quit"
+        exit 0
+    fi
+
+    echo $PWD > $LF_LAST_DIR
+    lf -remote "send $id quit"
+}}
+
+cmd on-cd &{{
+    if [[ -z ${LF_LAST_DIR:-''} ]]; then
+        exit 0
+    fi
+    cat /dev/null > $LF_LAST_DIR
+    fmt='\033[32;1m%u@%h\033[0m:\033[34;1m%d\033[0m\033[1m [+] \033[0m'
+    lf -remote "send $id set promptfmt \"$fmt\""
+}}
+
+cmd quit_if_saved %{{
+    if [[ -z ${LF_LAST_DIR:-} ]]; then
+        lf -remote "send $id quit"
+        exit 0
+    fi
+
+    if [[ $lf_promptfmt == *'[+]'* ]]; then
+        echo 'Not yet saved the last directory.'
+    else
+        lf -remote "send $id quit"
+    fi
+}}
+
+map <c-s> :save_cwd
+cmd w     :save_cwd
+cmd wr    :save_cwd
+cmd wri   :save_cwd
+cmd writ  :save_cwd
+cmd write :save_cwd
+cmd wa    :save_cwd
+cmd wal   :save_cwd
+cmd wall  :save_cwd
+
+map <c-q> :quit
+cmd q     :quit
+cmd qu    :quit
+cmd qui   :quit
+cmd qa    :quit
+cmd qal   :quit
+cmd qall  :quit
+
+map ZZ    :save_cwd_and_quit
+cmd wq    :save_cwd_and_quit
+cmd wqa   :save_cwd_and_quit
+cmd wqal  :save_cwd_and_quit
+cmd wqall :save_cwd_and_quit
+
+
+# }}}
+# ============================================================================
+
